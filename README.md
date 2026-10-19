@@ -58,14 +58,14 @@ The private reference solutions are not published. `selfcheck.py` uses the filme
 
 Linux or macOS, Python 3.11+, Node 20+. Steps 1–5 cost nothing and need no key. Video timestamps are approximate until the final cut.
 
-### 1. Clone (video ~4:20)
+### 1. Clone (video 4:39)
 What it is: the tasks, the hidden tests and the rig from the video.
 ```bash
 git clone https://github.com/schoolofai/deepseek-v41-flash-1017-cost-test && cd deepseek-v41-flash-1017-cost-test
 ```
 Expected: `tasks/  runner.py  proxy.py  harnesses.json  prices.json  results/ …`
 
-### 2. Install the three agents and the test runner (video ~4:20)
+### 2. Install the three agents and the test runner (video 4:51)
 What it is: `tools/package-lock.json` pins Claude Code 2.1.303, Codex CLI 0.163.0 and OpenCode 1.19.3 locally (nothing global); pytest runs the hidden tests.
 ```bash
 (cd tools && npm ci) && python3 -m venv .venv-tests && .venv-tests/bin/pip install pytest==8.4.2 pytest-timeout
@@ -73,7 +73,7 @@ ls tools/node_modules/.bin
 ```
 Expected: `claude  codex  opencode` among the binaries.
 
-### 3. Check the tasks ($0) (video ~4:50)
+### 3. Check the tasks ($0) (video 5:10)
 What it is: `selfcheck.py` runs the hidden tests on each starter repo (must not pass) and on each filmed agent's solution (must pass).
 ```bash
 python3 selfcheck.py
@@ -90,21 +90,21 @@ Expected (real output):
 SELF-CHECK PASSED
 ```
 
-### 4. Test the safety rails ($0, offline) (video ~5:20)
+### 4. Test the safety rails ($0, offline) (video 6:16)
 What it is: `proxy_selftest.py` drives `proxy.py` against a mock upstream: wrong model refused, provider pin injected, output clamp, budget guard, request cap.
 ```bash
 python3 proxy_selftest.py && python3 runner.py --estimate
 ```
 Expected: `PROXY SELF-TEST PASSED`, then the plan B table ending in `sum of per-run budgets: $2.77` under a `$3.00` hard cap.
 
-### 5. Dry run the real agents with a mock model ($0, no key) (video ~5:20)
+### 5. Dry run the real agents with a mock model ($0, no key) (video 5:29)
 What it is: every CLI really starts, talks to the local proxy with a dummy key, and a mock model answers. Nothing reaches a paid API.
 ```bash
 python3 runner.py --dry-run
 ```
 Expected: for each run, a line like `ended=exited exit=0 reqs=2 hidden 13/30 visible 3/5 wall 4.0s billed $0.0000`.
 
-### 6. The paid run (real money, under $3) (video ~5:35)
+### 6. The paid run (real money, under $3) (video 6:23)
 What it is: plan B, both tasks × three agents through OpenRouter, the key read only from the environment and never written to disk. Check your OpenRouter privacy settings first: if your account excludes providers that may train on paid prompts, DeepSeek's own endpoint is refused with a 404 (see Caveats).
 ```bash
 export OPENROUTER_API_KEY=...        # never commit it; nothing in this repo stores it
@@ -112,7 +112,7 @@ python3 runner.py --run --confirm
 ```
 Expected: one block per run, e.g. `ended=exited exit=0 reqs=6 hidden 30/30 visible 5/5 wall 28.0s billed $0.0039  running total $0.0039`, then `results: results/live-<stamp>/results.jsonl`. Re-run a subset with `--only t1_checkout_bugfix__opencode-deepseek,...`; the ledger in `results/spend_ledger.json` keeps the $3 cap across sessions.
 
-### 7. Make the receipt table (video ~5:50)
+### 7. Make the receipt table (video 6:48)
 What it is: `make_numbers.py` sums OpenRouter's per-response cost and cross-checks generation records.
 ```bash
 python3 make_numbers.py results/live-<stamp>
@@ -129,4 +129,4 @@ Expected: `results/live-<stamp>/summary.md` with one row per run (status, hidden
 - OpenRouter + Codex CLI: https://openrouter.ai/docs/guides/coding-agents/codex-cli
 - OpenCode providers: https://opencode.ai/docs/providers/
 
-MIT licence. Made for ProAI Clips. Narration in the video is an AI clone of the creator's own voice.
+MIT licence. Made for ProAI Clips.
