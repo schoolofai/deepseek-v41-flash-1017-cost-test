@@ -1,0 +1,202 @@
+--- a/logstats/parser.py
++++ b/logstats/parser.py
+@@ -12,10 +12,43 @@
+     ms: int
+ 
+ 
+-def parse_line(line: str):
+-    """Return an Event, or None for a malformed line."""
+-    pattern = re.compile(r"^(\S+) user=(\S+) path=(\S+) status=(\d{3}) ms=(\d+)$")
+-    m = pattern.match(line.strip())
++_LINE_RE = re.compile(r"^(\S+) user=(\S+) path=(\S+) status=(\d{3}) ms=(\d+)$")
++_FAST_RE = re.compile(
++    r"^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z"
++    r" user=(\S+) path=(\S+) status=([0-9]{3}) ms=([0-9]+)$"
++)
++_DAYS_IN_MONTH = (0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
++
++
++def _is_leap(year):
++    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
++
++
++def _epoch_seconds(year, month, day, hour, minute, second):
++    """Seconds since the epoch for a valid UTC civil time."""
++    if not 1 <= year <= 9999:
++        raise ValueError("year out of range")
++    if not 1 <= month <= 12:
++        raise ValueError("month out of range")
++    if not 0 <= hour <= 23 or not 0 <= minute <= 59 or not 0 <= second <= 59:
++        raise ValueError("time out of range")
++    max_day = _DAYS_IN_MONTH[month]
++    if month == 2 and _is_leap(year):
++        max_day = 29
++    if not 1 <= day <= max_day:
++        raise ValueError("day out of range")
++
++    y = year - (month <= 2)
++    era = y // 400
++    yoe = y - era * 400
++    doy = (153 * (month + (-3 if month > 2 else 9)) + 2) // 5 + day - 1
++    doe = yoe * 365 + yoe // 4 - yoe // 100 + doy
++    days = era * 146097 + doe - 719468
++    return days * 86400 + hour * 3600 + minute * 60 + second
++
++
++def _parse_slow(line):
++    m = _LINE_RE.match(line)
+     if not m:
+         return None
+     try:
+@@ -26,12 +59,38 @@
+     return Event(int(ts.timestamp()), m.group(2).lower(), path, int(m.group(4)), int(m.group(5)))
+ 
+ 
++def _parse_stripped(line):
++    m = _FAST_RE.match(line)
++    if m:
++        year, month, day, hour, minute, second = (
++            int(m.group(1)),
++            int(m.group(2)),
++            int(m.group(3)),
++            int(m.group(4)),
++            int(m.group(5)),
++            int(m.group(6)),
++        )
++        try:
++            ts = _epoch_seconds(year, month, day, hour, minute, second)
++        except ValueError:
++            return None
++        path = m.group(8).split("?")[0].rstrip("/") or "/"
++        return Event(ts, m.group(7).lower(), path, int(m.group(9)), int(m.group(10)))
++    return _parse_slow(line)
++
++
++def parse_line(line: str):
++    """Return an Event, or None for a malformed line."""
++    return _parse_stripped(line.strip())
++
++
+ def parse_all(lines):
+     events, skipped = [], 0
+     for line in lines:
+-        if not line.strip():
++        stripped = line.strip()
++        if not stripped:
+             continue
+-        e = parse_line(line)
++        e = _parse_stripped(stripped)
+         if e is None:
+             skipped += 1
+         else:
+--- a/logstats/report.py
++++ b/logstats/report.py
+@@ -1,3 +1,5 @@
++from collections import Counter
++
+ from .parser import parse_all
+ from .sessions import sessions_per_user, longest_session_seconds
+ 
+@@ -10,18 +12,22 @@
+ 
+ 
+ def top_paths(events, k=5):
+-    paths = [e.path for e in events]
+-    counts = []
+-    for p in set(paths):
+-        counts.append((p, paths.count(p)))
++    counts = list(Counter(e.path for e in events).items())
+     counts.sort(key=lambda pc: (-pc[1], pc[0]))
+     return counts[:k]
+ 
+ 
+ def latency_by_path(events):
++    by_path = {}
++    for e in events:
++        ms = by_path.get(e.path)
++        if ms is None:
++            by_path[e.path] = [e.ms]
++        else:
++            ms.append(e.ms)
+     out = {}
+-    for p in sorted(set(e.path for e in events)):
+-        ms = [e.ms for e in events if e.path == p]
++    for p in sorted(by_path):
++        ms = by_path[p]
+         out[p] = {"p50": percentile(ms, 50), "p95": percentile(ms, 95), "max": max(ms)}
+     return out
+ 
+@@ -29,7 +35,7 @@
+ def error_rate(events):
+     if not events:
+         return 0.0
+-    errors = len([e for e in events if e.status >= 500])
++    errors = sum(1 for e in events if e.status >= 500)
+     return round(errors / len(events), 4)
+ 
+ 
+--- a/logstats/sessions.py
++++ b/logstats/sessions.py
+@@ -1,29 +1,45 @@
+ SESSION_GAP = 30 * 60  # a gap of MORE than 30 minutes starts a new session
++
++
++def _timestamps_by_user(events):
++    by_user = {}
++    for e in events:
++        counts = by_user.get(e.user)
++        if counts is None:
++            by_user[e.user] = {e.ts: 1}
++        else:
++            counts[e.ts] = counts.get(e.ts, 0) + 1
++    return by_user
+ 
+ 
+ def sessions_per_user(events):
+     """Return {user: number_of_sessions}."""
+-    result = {e.user: 1 for e in events}
+-    for e in events:
+-        earlier = [o for o in events if o.user == e.user and (o.ts < e.ts)]
+-        if not earlier:
+-            continue
+-        prev = max(o.ts for o in earlier)
+-        if e.ts - prev > SESSION_GAP:
+-            result[e.user] += 1
++    result = {}
++    for user, counts in _timestamps_by_user(events).items():
++        sessions = 1
++        previous = None
++        for ts in sorted(counts):
++            if previous is not None and ts - previous > SESSION_GAP:
++                sessions += counts[ts]
++            previous = ts
++        result[user] = sessions
+     return result
+ 
+ 
+ def longest_session_seconds(events):
+     """Return {user: length in seconds of that user's longest session}."""
+     out = {}
+-    users = sorted(set(e.user for e in events))
+-    for u in users:
+-        times = sorted(e.ts for e in events if e.user == u)
+-        best, start = 0, times[0]
+-        for i in range(1, len(times)):
+-            if times[i] - times[i - 1] > SESSION_GAP:
+-                start = times[i]
+-            best = max(best, times[i] - start)
+-        out[u] = best
++    by_user = _timestamps_by_user(events)
++    for user in sorted(by_user):
++        best, start, previous = 0, None, None
++        for ts in sorted(by_user[user]):
++            if start is None:
++                start = ts
++            elif ts - previous > SESSION_GAP:
++                start = ts
++            length = ts - start
++            if length > best:
++                best = length
++            previous = ts
++        out[user] = best
+     return out

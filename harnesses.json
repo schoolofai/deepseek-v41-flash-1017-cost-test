@@ -1,0 +1,161 @@
+{
+ "_note": "Harness-vs-harness, like for like. Same task prompt, same repo, same tools class (read/edit/write files, shell, search), web and sub-agents off for all, same per-task request cap and wall time, same proxy rules. Each harness keeps its own built-in system prompt (that is part of what we are testing) and its default reasoning settings.",
+ "harnesses": {
+  "opencode-deepseek": {
+   "label": "DeepSeek V4.1 Flash 1017 in OpenCode",
+   "cli": "opencode",
+   "version": "1.19.3",
+   "model": "deepseek/deepseek-v4.1-flash-1017",
+   "pin": "deepseek",
+   "api": "chat"
+  },
+  "claude-sonnet": {
+   "label": "Claude Sonnet 5.5 in Claude Code",
+   "cli": "claude",
+   "version": "2.1.303",
+   "model": "anthropic/claude-sonnet-5.5",
+   "pin": "anthropic",
+   "api": "messages"
+  },
+  "codex-gpt": {
+   "label": "GPT-6.1 Sol in Codex CLI",
+   "cli": "codex",
+   "version": "0.163.0",
+   "model": "openai/gpt-6.1-sol",
+   "pin": "openai",
+   "api": "responses"
+  },
+  "claude-deepseek": {
+   "label": "OPTIONAL control: DeepSeek V4.1 Flash 1017 in Claude Code",
+   "cli": "claude",
+   "version": "2.1.303",
+   "model": "deepseek/deepseek-v4.1-flash-1017",
+   "pin": "deepseek",
+   "api": "messages",
+   "optional": true
+  }
+ },
+ "limits": {
+  "max_output_tokens_per_request": 12288,
+  "max_input_tokens_per_request": 100000,
+  "global_cap_usd": 3.0
+ },
+ "plans": {
+  "B": {
+   "_why": "RECOMMENDED. 2 tasks (easy bug fix + hard refactor/perf) x 3 harnesses, n=1. Cut from 3 tasks because frontier agent loops on all 3 tasks could plausibly cost $1.6-3.1 in total, which does not fit under $3 with a safety margin; dropping T2 leaves enough per-run budget that the frontier runs are unlikely to be stopped by our cap on the hard task.",
+   "order": [
+    [
+     "t1_checkout_bugfix",
+     "opencode-deepseek"
+    ],
+    [
+     "t1_checkout_bugfix",
+     "codex-gpt"
+    ],
+    [
+     "t1_checkout_bugfix",
+     "claude-sonnet"
+    ],
+    [
+     "t3_logstats_perf",
+     "claude-sonnet"
+    ],
+    [
+     "t3_logstats_perf",
+     "opencode-deepseek"
+    ],
+    [
+     "t3_logstats_perf",
+     "codex-gpt"
+    ]
+   ],
+   "budget_usd": {
+    "t1_checkout_bugfix": {
+     "opencode-deepseek": 0.08,
+     "codex-gpt": 0.42,
+     "claude-sonnet": 0.42
+    },
+    "t3_logstats_perf": {
+     "opencode-deepseek": 0.15,
+     "codex-gpt": 0.85,
+     "claude-sonnet": 0.85
+    }
+   }
+  },
+  "A": {
+   "_why": "All 3 tasks x 3 harnesses, n=1, tighter budgets. Fits the $3 cap by construction, but frontier runs on T2/T3 have a real chance of being stopped by the per-run budget (recorded as 'stopped: budget', not as a model failure).",
+   "order": [
+    [
+     "t1_checkout_bugfix",
+     "opencode-deepseek"
+    ],
+    [
+     "t1_checkout_bugfix",
+     "codex-gpt"
+    ],
+    [
+     "t1_checkout_bugfix",
+     "claude-sonnet"
+    ],
+    [
+     "t2_tracker_feature",
+     "codex-gpt"
+    ],
+    [
+     "t2_tracker_feature",
+     "claude-sonnet"
+    ],
+    [
+     "t2_tracker_feature",
+     "opencode-deepseek"
+    ],
+    [
+     "t3_logstats_perf",
+     "claude-sonnet"
+    ],
+    [
+     "t3_logstats_perf",
+     "opencode-deepseek"
+    ],
+    [
+     "t3_logstats_perf",
+     "codex-gpt"
+    ]
+   ],
+   "budget_usd": {
+    "t1_checkout_bugfix": {
+     "opencode-deepseek": 0.06,
+     "codex-gpt": 0.3,
+     "claude-sonnet": 0.3
+    },
+    "t2_tracker_feature": {
+     "opencode-deepseek": 0.08,
+     "codex-gpt": 0.45,
+     "claude-sonnet": 0.45
+    },
+    "t3_logstats_perf": {
+     "opencode-deepseek": 0.1,
+     "codex-gpt": 0.55,
+     "claude-sonnet": 0.55
+    }
+   }
+  },
+  "C": {
+   "_why": "Plan B plus the optional control: DeepSeek inside Claude Code (same harness as Sonnet) on both tasks. Separates 'model' from 'harness'. Total budgets $2.95, so the global guard may shrink or skip the last run; only if Niladri wants it.",
+   "extends": "B",
+   "extra": [
+    [
+     "t1_checkout_bugfix",
+     "claude-deepseek",
+     0.06
+    ],
+    [
+     "t3_logstats_perf",
+     "claude-deepseek",
+     0.12
+    ]
+   ]
+  }
+ },
+ "default_plan": "B"
+}

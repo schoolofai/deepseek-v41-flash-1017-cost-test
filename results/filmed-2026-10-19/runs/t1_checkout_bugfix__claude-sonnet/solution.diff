@@ -1,0 +1,93 @@
+--- a/shop/cart.py
++++ b/shop/cart.py
+@@ -11,7 +11,14 @@
+     def add(self, sku: str, qty: int, unit_price: str) -> None:
+         if qty < 1:
+             raise ValueError("qty must be >= 1")
+-        self._lines.append([sku, qty, to_cents(unit_price)])
++        unit = to_cents(unit_price)
++        for line in self._lines:
++            if line[0] == sku:
++                if line[2] != unit:
++                    raise ValueError("unit price mismatch")
++                line[1] += qty
++                return
++        self._lines.append([sku, qty, unit])
+ 
+     def remove(self, sku: str, qty: int) -> None:
+         for line in self._lines:
+@@ -19,6 +26,8 @@
+                 if qty > line[1]:
+                     raise ValueError("removing more than present")
+                 line[1] -= qty
++                if line[1] == 0:
++                    self._lines.remove(line)
+                 return
+         raise ValueError(f"no such sku {sku}")
+ 
+@@ -31,7 +40,7 @@
+     def totals(self, code=None) -> dict:
+         subtotal = self.subtotal()
+         discount = apply_discount(subtotal, code)
+-        tax = tax_for(subtotal, self.region)
+         taxable = subtotal - discount
++        tax = tax_for(taxable, self.region)
+         return {"subtotal": subtotal, "discount": discount, "taxable": taxable,
+                 "tax": tax, "total": taxable + tax}
+--- a/shop/discounts.py
++++ b/shop/discounts.py
+@@ -6,11 +6,12 @@
+ def apply_discount(subtotal_cents: int, code) -> int:
+     if not code:
+         return 0
++    code = code.upper()
+     if code in _PERCENT:
+         pct, minimum = _PERCENT[code]
+         if subtotal_cents < minimum:
+             return 0
+         return round_half_up(subtotal_cents * pct, 100)
+     if code == "FLAT5":
+-        return 500
++        return min(500, subtotal_cents)
+     raise KeyError(code)
+--- a/shop/money.py
++++ b/shop/money.py
+@@ -1,13 +1,17 @@
+ """Money helpers. All amounts are integer cents."""
++import re
+ 
+ 
+ def to_cents(amount: str) -> int:
+     amount = amount.strip()
+     if not amount:
+         raise ValueError("empty amount")
+-    if "." in amount and len(amount.split(".")[1]) > 2:
+-        raise ValueError(f"too many decimals: {amount}")
+-    return int(float(amount) * 100)
++    m = re.fullmatch(r"(-?)(\d+)(?:\.(\d{1,2}))?", amount, re.ASCII)
++    if not m:
++        raise ValueError(f"invalid amount: {amount!r}")
++    sign, whole, frac = m.groups()
++    cents = int(whole) * 100 + int((frac or "").ljust(2, "0"))
++    return -cents if sign else cents
+ 
+ 
+ def fmt(cents: int) -> str:
+@@ -18,4 +22,7 @@
+ 
+ def round_half_up(numerator: int, denominator: int) -> int:
+     """Integer division rounded half away from zero."""
+-    return int(numerator / denominator)
++    if denominator < 0:
++        numerator, denominator = -numerator, -denominator
++    sign = -1 if numerator < 0 else 1
++    return sign * ((abs(numerator) * 2 + denominator) // (2 * denominator))
+--- a/shop/tax.py
++++ b/shop/tax.py
+@@ -5,5 +5,5 @@
+ 
+ 
+ def tax_for(cents: int, region: str) -> int:
+-    bp = RATES_BP[region]
++    bp = RATES_BP[region.upper()]
+     return round_half_up(cents * bp, 10000)

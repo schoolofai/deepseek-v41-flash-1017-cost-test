@@ -1,0 +1,111 @@
+--- a/shop/cart.py
++++ b/shop/cart.py
+@@ -11,14 +11,23 @@
+     def add(self, sku: str, qty: int, unit_price: str) -> None:
+         if qty < 1:
+             raise ValueError("qty must be >= 1")
+-        self._lines.append([sku, qty, to_cents(unit_price)])
++        price = to_cents(unit_price)
++        for line in self._lines:
++            if line[0] == sku:
++                if line[2] != price:
++                    raise ValueError("unit price does not match existing line")
++                line[1] += qty
++                return
++        self._lines.append([sku, qty, price])
+ 
+     def remove(self, sku: str, qty: int) -> None:
+-        for line in self._lines:
++        for index, line in enumerate(self._lines):
+             if line[0] == sku:
+                 if qty > line[1]:
+                     raise ValueError("removing more than present")
+                 line[1] -= qty
++                if line[1] == 0:
++                    del self._lines[index]
+                 return
+         raise ValueError(f"no such sku {sku}")
+ 
+@@ -31,7 +40,7 @@
+     def totals(self, code=None) -> dict:
+         subtotal = self.subtotal()
+         discount = apply_discount(subtotal, code)
+-        tax = tax_for(subtotal, self.region)
+         taxable = subtotal - discount
++        tax = tax_for(taxable, self.region)
+         return {"subtotal": subtotal, "discount": discount, "taxable": taxable,
+                 "tax": tax, "total": taxable + tax}
+--- a/shop/discounts.py
++++ b/shop/discounts.py
+@@ -6,11 +6,14 @@
+ def apply_discount(subtotal_cents: int, code) -> int:
+     if not code:
+         return 0
++    if not isinstance(code, str):
++        raise KeyError(code)
++    code = code.upper()
+     if code in _PERCENT:
+         pct, minimum = _PERCENT[code]
+         if subtotal_cents < minimum:
+             return 0
+-        return round_half_up(subtotal_cents * pct, 100)
++        return max(0, round_half_up(subtotal_cents * pct, 100))
+     if code == "FLAT5":
+-        return 500
++        return max(0, min(500, subtotal_cents))
+     raise KeyError(code)
+--- a/shop/money.py
++++ b/shop/money.py
+@@ -1,13 +1,23 @@
+ """Money helpers. All amounts are integer cents."""
++
++import re
++
++_AMOUNT_RE = re.compile(r"^-?\d+(?:\.\d{1,2})?$")
+ 
+ 
+ def to_cents(amount: str) -> int:
++    if not isinstance(amount, str):
++        raise ValueError(f"invalid amount: {amount!r}")
+     amount = amount.strip()
+-    if not amount:
+-        raise ValueError("empty amount")
+-    if "." in amount and len(amount.split(".")[1]) > 2:
+-        raise ValueError(f"too many decimals: {amount}")
+-    return int(float(amount) * 100)
++    if not _AMOUNT_RE.match(amount):
++        raise ValueError(f"invalid amount: {amount!r}")
++    negative = amount.startswith("-")
++    if negative:
++        amount = amount[1:]
++    whole, _, fraction = amount.partition(".")
++    fraction = (fraction + "00")[:2]
++    cents = int(whole) * 100 + int(fraction)
++    return -cents if negative else cents
+ 
+ 
+ def fmt(cents: int) -> str:
+@@ -18,4 +28,11 @@
+ 
+ def round_half_up(numerator: int, denominator: int) -> int:
+     """Integer division rounded half away from zero."""
+-    return int(numerator / denominator)
++    if denominator == 0:
++        raise ZeroDivisionError("division by zero")
++    negative = (numerator < 0) != (denominator < 0)
++    n, d = abs(numerator), abs(denominator)
++    quotient, remainder = divmod(n, d)
++    if remainder * 2 >= d:
++        quotient += 1
++    return -quotient if negative else quotient
+--- a/shop/tax.py
++++ b/shop/tax.py
+@@ -5,5 +5,7 @@
+ 
+ 
+ def tax_for(cents: int, region: str) -> int:
+-    bp = RATES_BP[region]
++    if not isinstance(region, str):
++        raise KeyError(region)
++    bp = RATES_BP[region.upper()]
+     return round_half_up(cents * bp, 10000)

@@ -1,0 +1,206 @@
+--- a/logstats/parser.py
++++ b/logstats/parser.py
+@@ -1,10 +1,16 @@
+ import re
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
++from typing import NamedTuple
++
++_LINE = re.compile(r"^(\S+) user=(\S+) path=(\S+) status=(\d{3}) ms=(\d+)$")
++# Canonical timestamps take this fast path; anything else (e.g. lowercase t/z,
++# 1-digit fields, non-ASCII digits) falls back to strptime to keep its leniency.
++_FAST_TS = re.compile(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)Z", re.ASCII)
++_UTC = timezone.utc
++_FMT = "%Y-%m-%dT%H:%M:%SZ"
+ 
+ 
+-@dataclass(frozen=True)
+-class Event:
++class Event(NamedTuple):
+     ts: int        # unix seconds
+     user: str
+     path: str
+@@ -12,28 +18,46 @@
+     ms: int
+ 
+ 
++def _parse_ts(s):
++    """Return unix seconds, or None if the timestamp is invalid."""
++    m = _FAST_TS.fullmatch(s)
++    try:
++        if m:
++            y, mo, d, h, mi, sec = map(int, m.groups())
++            dt = datetime(y, mo, d, h, mi, sec, tzinfo=_UTC)
++        else:
++            dt = datetime.strptime(s, _FMT).replace(tzinfo=_UTC)
++    except ValueError:
++        return None
++    return int(dt.timestamp())
++
++
++def _parse_stripped(line: str):
++    m = _LINE.match(line)
++    if not m:
++        return None
++    ts = _parse_ts(m.group(1))
++    if ts is None:
++        return None
++    path = m.group(3).split("?")[0].rstrip("/") or "/"
++    return Event(ts, m.group(2).lower(), path, int(m.group(4)), int(m.group(5)))
++
++
+ def parse_line(line: str):
+     """Return an Event, or None for a malformed line."""
+-    pattern = re.compile(r"^(\S+) user=(\S+) path=(\S+) status=(\d{3}) ms=(\d+)$")
+-    m = pattern.match(line.strip())
+-    if not m:
+-        return None
+-    try:
+-        ts = datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+-    except ValueError:
+-        return None
+-    path = m.group(3).split("?")[0].rstrip("/") or "/"
+-    return Event(int(ts.timestamp()), m.group(2).lower(), path, int(m.group(4)), int(m.group(5)))
++    return _parse_stripped(line.strip())
+ 
+ 
+ def parse_all(lines):
+     events, skipped = [], 0
++    append = events.append
+     for line in lines:
+-        if not line.strip():
++        line = line.strip()
++        if not line:
+             continue
+-        e = parse_line(line)
++        e = _parse_stripped(line)
+         if e is None:
+             skipped += 1
+         else:
+-            events.append(e)
++            append(e)
+     return events, skipped
+--- a/logstats/report.py
++++ b/logstats/report.py
+@@ -1,35 +1,43 @@
++from collections import Counter
++
+ from .parser import parse_all
+ from .sessions import sessions_per_user, longest_session_seconds
+ 
+ 
+-def percentile(values, pct):
+-    """Nearest-rank percentile of a non-empty list."""
+-    ordered = sorted(values)
++def _rank(ordered, pct):
+     rank = -(-pct * len(ordered) // 100)  # ceil
+     return ordered[max(rank, 1) - 1]
+ 
+ 
++def percentile(values, pct):
++    """Nearest-rank percentile of a non-empty list."""
++    return _rank(sorted(values), pct)
++
++
+ def top_paths(events, k=5):
+-    paths = [e.path for e in events]
+-    counts = []
+-    for p in set(paths):
+-        counts.append((p, paths.count(p)))
+-    counts.sort(key=lambda pc: (-pc[1], pc[0]))
+-    return counts[:k]
++    counts = Counter(e.path for e in events)
++    ranked = sorted(counts.items(), key=lambda pc: (-pc[1], pc[0]))
++    return ranked[:k]
+ 
+ 
+ def latency_by_path(events):
++    by_path = {}
++    for e in events:
++        try:
++            by_path[e.path].append(e.ms)
++        except KeyError:
++            by_path[e.path] = [e.ms]
+     out = {}
+-    for p in sorted(set(e.path for e in events)):
+-        ms = [e.ms for e in events if e.path == p]
+-        out[p] = {"p50": percentile(ms, 50), "p95": percentile(ms, 95), "max": max(ms)}
++    for p in sorted(by_path):
++        ms = sorted(by_path[p])
++        out[p] = {"p50": _rank(ms, 50), "p95": _rank(ms, 95), "max": ms[-1]}
+     return out
+ 
+ 
+ def error_rate(events):
+     if not events:
+         return 0.0
+-    errors = len([e for e in events if e.status >= 500])
++    errors = sum(1 for e in events if e.status >= 500)
+     return round(errors / len(events), 4)
+ 
+ 
+--- a/logstats/sessions.py
++++ b/logstats/sessions.py
+@@ -1,29 +1,46 @@
+ SESSION_GAP = 30 * 60  # a gap of MORE than 30 minutes starts a new session
++
++
++def _times_by_user(events):
++    by_user = {}
++    for e in events:
++        try:
++            by_user[e.user].append(e.ts)
++        except KeyError:
++            by_user[e.user] = [e.ts]
++    for times in by_user.values():
++        times.sort()
++    return by_user
+ 
+ 
+ def sessions_per_user(events):
+     """Return {user: number_of_sessions}."""
+-    result = {e.user: 1 for e in events}
+-    for e in events:
+-        earlier = [o for o in events if o.user == e.user and (o.ts < e.ts)]
+-        if not earlier:
+-            continue
+-        prev = max(o.ts for o in earlier)
+-        if e.ts - prev > SESSION_GAP:
+-            result[e.user] += 1
++    result = {}
++    for user, times in _times_by_user(events).items():
++        # Quirk kept from the original: every event (including duplicates at the
++        # same timestamp) that follows a gap > SESSION_GAP counts as a new session.
++        count, lower, cur = 1, None, None
++        for t in times:
++            if t != cur:
++                lower, cur = cur, t
++            if lower is not None and t - lower > SESSION_GAP:
++                count += 1
++        result[user] = count
+     return result
+ 
+ 
+ def longest_session_seconds(events):
+     """Return {user: length in seconds of that user's longest session}."""
++    by_user = _times_by_user(events)
+     out = {}
+-    users = sorted(set(e.user for e in events))
+-    for u in users:
+-        times = sorted(e.ts for e in events if e.user == u)
+-        best, start = 0, times[0]
+-        for i in range(1, len(times)):
+-            if times[i] - times[i - 1] > SESSION_GAP:
+-                start = times[i]
+-            best = max(best, times[i] - start)
++    for u in sorted(by_user):
++        times = by_user[u]
++        best, start, prev = 0, times[0], times[0]
++        for t in times:
++            if t - prev > SESSION_GAP:
++                start = t
++            if t - start > best:
++                best = t - start
++            prev = t
+         out[u] = best
+     return out

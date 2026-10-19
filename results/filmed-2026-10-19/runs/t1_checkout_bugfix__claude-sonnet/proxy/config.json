@@ -1,0 +1,25 @@
+{
+ "run_id": "t1_checkout_bugfix__claude-sonnet",
+ "mode": "live",
+ "listen_port": 0,
+ "upstream_host": "openrouter.ai",
+ "model": "anthropic/claude-sonnet-5.5",
+ "pin": "anthropic",
+ "max_requests": 25,
+ "budget_usd": 0.42,
+ "max_output_tokens": 12288,
+ "max_input_tokens": 100000,
+ "prices": {
+  "in": 2.0,
+  "out": 10.0,
+  "cache_read": 0.1,
+  "cache_write": 2.5,
+  "cache_write_1h": 4.0
+ },
+ "input_guard_rate": 4.0,
+ "cache_write_guard_rate": 4.0,
+ "log": "./.sandbox/live-20261019-125630/t1_checkout_bugfix__claude-sonnet/proxy/requests.jsonl",
+ "state": "./.sandbox/live-20261019-125630/t1_checkout_bugfix__claude-sonnet/proxy/state.json",
+ "stop_flag": "./.sandbox/live-20261019-125630/t1_checkout_bugfix__claude-sonnet/proxy/STOP",
+ "port_file": "./.sandbox/live-20261019-125630/t1_checkout_bugfix__claude-sonnet/proxy/port"
+}

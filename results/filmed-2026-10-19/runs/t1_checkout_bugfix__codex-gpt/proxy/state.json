@@ -1,0 +1,32 @@
+{
+ "requests": 8,
+ "refused": 0,
+ "spent_usd": 0.10615219999999999,
+ "reserved_usd": 0.0,
+ "stopped": false,
+ "stop_reason": null,
+ "gen_ids": [
+  "gen-1792411039-Zsnoxr2vGnuvL0cGa8gv",
+  "gen-1792411039-Zsnoxr2vGnuvL0cGa8gv",
+  "gen-1792411042-13ebAs8IK9wC0fiaalhk",
+  "gen-1792411042-13ebAs8IK9wC0fiaalhk",
+  "gen-1792411046-u6JMft5mqVtzwfmaz9o4",
+  "gen-1792411046-u6JMft5mqVtzwfmaz9o4",
+  "gen-1792411062-vd7MFc2XpZ8MFl9Vuu32",
+  "gen-1792411062-vd7MFc2XpZ8MFl9Vuu32",
+  "gen-1792411067-pMwI0zoSQ1FzZ1VMvUVI",
+  "gen-1792411067-pMwI0zoSQ1FzZ1VMvUVI",
+  "gen-1792411072-HfaZV4jpTnrULqoUuW6g",
+  "gen-1792411072-HfaZV4jpTnrULqoUuW6g",
+  "gen-1792411134-gHGfhnbM0OIY4JNFTcAV",
+  "gen-1792411134-gHGfhnbM0OIY4JNFTcAV",
+  "gen-1792411141-CkEvZNUrWf3RJC0fYQJF",
+  "gen-1792411141-CkEvZNUrWf3RJC0fYQJF"
+ ],
+ "strict": false,
+ "prev_in_tokens": 17608,
+ "prev_cache_ok": true,
+ "prev_t": 1792411146.4456685,
+ "bytes_per_token": 3.0,
+ "mock_turns": 0
+}

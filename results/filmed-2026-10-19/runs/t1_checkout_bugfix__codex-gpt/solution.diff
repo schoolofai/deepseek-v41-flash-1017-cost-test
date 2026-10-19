@@ -1,0 +1,327 @@
+--- a/shop/cart.py
++++ b/shop/cart.py
+@@ -11,14 +11,25 @@
+     def add(self, sku: str, qty: int, unit_price: str) -> None:
+         if qty < 1:
+             raise ValueError("qty must be >= 1")
+-        self._lines.append([sku, qty, to_cents(unit_price)])
++        unit_cents = to_cents(unit_price)
++        for line in self._lines:
++            if line[0] == sku:
++                if line[2] != unit_cents:
++                    raise ValueError("unit price must match")
++                line[1] += qty
++                return
++        self._lines.append([sku, qty, unit_cents])
+ 
+     def remove(self, sku: str, qty: int) -> None:
++        if qty < 1:
++            raise ValueError("qty must be >= 1")
+         for line in self._lines:
+             if line[0] == sku:
+                 if qty > line[1]:
+                     raise ValueError("removing more than present")
+                 line[1] -= qty
++                if line[1] == 0:
++                    self._lines.remove(line)
+                 return
+         raise ValueError(f"no such sku {sku}")
+ 
+@@ -31,7 +42,7 @@
+     def totals(self, code=None) -> dict:
+         subtotal = self.subtotal()
+         discount = apply_discount(subtotal, code)
+-        tax = tax_for(subtotal, self.region)
+         taxable = subtotal - discount
++        tax = tax_for(taxable, self.region)
+         return {"subtotal": subtotal, "discount": discount, "taxable": taxable,
+                 "tax": tax, "total": taxable + tax}
+--- a/shop/discounts.py
++++ b/shop/discounts.py
+@@ -4,13 +4,14 @@
+ 
+ 
+ def apply_discount(subtotal_cents: int, code) -> int:
+-    if not code:
++    if code is None or code == "":
+         return 0
++    code = code.upper()
+     if code in _PERCENT:
+         pct, minimum = _PERCENT[code]
+         if subtotal_cents < minimum:
+             return 0
+         return round_half_up(subtotal_cents * pct, 100)
+     if code == "FLAT5":
+-        return 500
++        return max(0, min(500, subtotal_cents))
+     raise KeyError(code)
+--- a/shop/money.py
++++ b/shop/money.py
+@@ -1,13 +1,15 @@
+ """Money helpers. All amounts are integer cents."""
++
++import re
+ 
+ 
+ def to_cents(amount: str) -> int:
+-    amount = amount.strip()
+-    if not amount:
+-        raise ValueError("empty amount")
+-    if "." in amount and len(amount.split(".")[1]) > 2:
+-        raise ValueError(f"too many decimals: {amount}")
+-    return int(float(amount) * 100)
++    match = re.fullmatch(r"(-?)([0-9]+)(?:\.([0-9]{1,2}))?", amount)
++    if match is None:
++        raise ValueError(f"invalid amount: {amount}")
++    sign, whole, fraction = match.groups()
++    cents = int(whole) * 100 + int((fraction or "").ljust(2, "0"))
++    return -cents if sign else cents
+ 
+ 
+ def fmt(cents: int) -> str:
+@@ -18,4 +20,7 @@
+ 
+ def round_half_up(numerator: int, denominator: int) -> int:
+     """Integer division rounded half away from zero."""
+-    return int(numerator / denominator)
++    quotient, remainder = divmod(abs(numerator), abs(denominator))
++    if remainder * 2 >= abs(denominator):
++        quotient += 1
++    return -quotient if (numerator < 0) != (denominator < 0) else quotient
+--- a/shop/tax.py
++++ b/shop/tax.py
+@@ -5,5 +5,5 @@
+ 
+ 
+ def tax_for(cents: int, region: str) -> int:
+-    bp = RATES_BP[region]
++    bp = RATES_BP[region.upper()]
+     return round_half_up(cents * bp, 10000)
+--- /dev/null
++++ b/tests/test_spec.py
+@@ -0,0 +1,225 @@
++import pytest
++
++from shop.cart import Cart
++from shop.discounts import apply_discount
++from shop.money import fmt, round_half_up, to_cents
++from shop.tax import tax_for
++
++
++@pytest.mark.parametrize(
++    "amount, expected",
++    [
++        ("12.34", 1234),
++        ("5", 500),
++        ("5.5", 550),
++        ("0", 0),
++        ("-0.00", 0),
++        ("-0.05", -5),
++        ("-5.5", -550),
++        ("-12", -1200),
++        ("0005.50", 550),
++        ("9007199254740993.99", 900719925474099399),
++        ("-9007199254740993.99", -900719925474099399),
++    ],
++)
++def test_to_cents(amount, expected):
++    assert to_cents(amount) == expected
++
++
++@pytest.mark.parametrize("cents", range(-100, 101))
++def test_money_round_trip(cents):
++    assert to_cents(fmt(cents)) == cents
++
++
++@pytest.mark.parametrize(
++    "amount",
++    [
++        "", "-", ".", ".50", "1.", "+1.00", " 1.00", "1.00 ", "1.00\n",
++        "1e2", "NaN", "inf", "--1", "1.2.3", "1.234", "1_000", "junk",
++    ],
++)
++def test_to_cents_rejects_invalid_amounts(amount):
++    with pytest.raises(ValueError):
++        to_cents(amount)
++
++
++@pytest.mark.parametrize(
++    "cents, expected",
++    [(1234, "12.34"), (-5, "-0.05"), (-1234, "-12.34"), (0, "0.00")],
++)
++def test_fmt(cents, expected):
++    assert fmt(cents) == expected
++
++
++@pytest.mark.parametrize(
++    "numerator, denominator, expected",
++    [
++        (0, 10, 0),
++        (4, 10, 0),
++        (5, 10, 1),
++        (6, 10, 1),
++        (15, 10, 2),
++        (-4, 10, 0),
++        (-5, 10, -1),
++        (-6, 10, -1),
++        (-15, 10, -2),
++        (5, -10, -1),
++        (-5, -10, 1),
++        (6, 4, 2),
++        (7, 3, 2),
++        (8, 3, 3),
++        (90071992547409935, 10, 9007199254740994),
++        (-90071992547409935, 10, -9007199254740994),
++    ],
++)
++def test_round_half_up(numerator, denominator, expected):
++    assert round_half_up(numerator, denominator) == expected
++
++
++def test_round_half_up_zero_denominator():
++    with pytest.raises(ZeroDivisionError):
++        round_half_up(1, 0)
++
++
++@pytest.mark.parametrize(
++    "subtotal, code, expected",
++    [
++        (10000, None, 0),
++        (10000, "", 0),
++        (10000, "SAVE10", 1000),
++        (15, "save10", 2),
++        (14, "SaVe10", 1),
++        (4999, "SAVE25", 0),
++        (5000, "save25", 1250),
++        (5002, "SaVe25", 1251),
++        (10000, "FLAT5", 500),
++        (500, "flat5", 500),
++        (499, "FlAt5", 499),
++        (0, "FLAT5", 0),
++        (-100, "SAVE10", 0),
++        (-100, "SAVE25", 0),
++        (-100, "FLAT5", 0),
++    ],
++)
++def test_discounts(subtotal, code, expected):
++    assert apply_discount(subtotal, code) == expected
++
++
++def test_unknown_discount():
++    with pytest.raises(KeyError):
++        apply_discount(10000, "UNKNOWN")
++
++
++@pytest.mark.parametrize(
++    "cents, region, expected",
++    [
++        (10000, "UK", 2000),
++        (3, "uk", 1),
++        (10000, "DE", 1900),
++        (50, "de", 10),
++        (10000, "US-CA", 725),
++        (200, "us-ca", 15),
++        (10000, "US-OR", 0),
++        (12345, "us-or", 0),
++        (0, "UK", 0),
++        (-200, "US-CA", -15),
++    ],
++)
++def test_tax(cents, region, expected):
++    assert tax_for(cents, region) == expected
++
++
++def test_unknown_region():
++    with pytest.raises(KeyError):
++        tax_for(0, "UNKNOWN")
++
++
++def test_cart_merges_skus_and_preserves_order():
++    cart = Cart("UK")
++    cart.add("B", 1, "5.00")
++    cart.add("A", 2, "0.29")
++    cart.add("B", 3, "5")
++    assert cart.lines() == [("B", 4, 500), ("A", 2, 29)]
++    assert cart.subtotal() == 2058
++
++
++def test_cart_rejects_conflicting_prices_without_changing_lines():
++    cart = Cart("UK")
++    cart.add("A", 2, "5.00")
++    with pytest.raises(ValueError):
++        cart.add("A", 1, "6.00")
++    assert cart.lines() == [("A", 2, 500)]
++
++
++@pytest.mark.parametrize("qty", [0, -1])
++def test_cart_rejects_invalid_quantities(qty):
++    cart = Cart("UK")
++    with pytest.raises(ValueError):
++        cart.add("A", qty, "1.00")
++    assert cart.lines() == []
++    cart.add("A", 2, "1.00")
++    with pytest.raises(ValueError):
++        cart.remove("A", qty)
++    assert cart.lines() == [("A", 2, 100)]
++
++
++def test_cart_remove_and_readd():
++    cart = Cart("UK")
++    cart.add("A", 3, "5.00")
++    cart.add("B", 1, "1.00")
++    cart.remove("A", 1)
++    assert cart.lines() == [("A", 2, 500), ("B", 1, 100)]
++    cart.remove("A", 2)
++    assert cart.lines() == [("B", 1, 100)]
++    cart.add("A", 1, "6.00")
++    assert cart.lines() == [("B", 1, 100), ("A", 1, 600)]
++    cart.remove("B", 1)
++    cart.remove("A", 1)
++    assert cart.lines() == []
++    assert cart.subtotal() == 0
++
++
++def test_cart_rejects_invalid_removals_without_changing_lines():
++    cart = Cart("UK")
++    cart.add("A", 2, "5.00")
++    with pytest.raises(ValueError):
++        cart.remove("A", 3)
++    with pytest.raises(ValueError):
++        cart.remove("B", 1)
++    assert cart.lines() == [("A", 2, 500)]
++
++
++def test_lines_returns_a_snapshot():
++    cart = Cart("UK")
++    cart.add("A", 1, "1.00")
++    snapshot = cart.lines()
++    snapshot.append(("B", 1, 200))
++    cart.add("A", 1, "1.00")
++    assert snapshot == [("A", 1, 100), ("B", 1, 200)]
++    assert cart.lines() == [("A", 2, 100)]
++
++
++@pytest.mark.parametrize(
++    "region, price, code, expected",
++    [
++        ("uk", "0.15", "save10", (15, 2, 13, 3, 16)),
++        ("de", "50.02", "save25", (5002, 1251, 3751, 713, 4464)),
++        ("us-ca", "7.00", "flat5", (700, 500, 200, 15, 215)),
++        ("UK", "1.00", "FLAT5", (100, 100, 0, 0, 0)),
++        ("US-OR", "10.00", None, (1000, 0, 1000, 0, 1000)),
++    ],
++)
++def test_cart_totals(region, price, code, expected):
++    cart = Cart(region)
++    cart.add("A", 1, price)
++    totals = dict(zip(("subtotal", "discount", "taxable", "tax", "total"), expected))
++    assert cart.totals(code) == totals
++    assert cart.totals(code) == totals
++    assert cart.lines() == [("A", 1, to_cents(price))]
++
++
++@pytest.mark.parametrize("code", [None, "", "SAVE10", "SAVE25", "FLAT5"])
++def test_empty_cart(code):
++    assert Cart("UK").totals(code) == {
++        "subtotal": 0, "discount": 0, "taxable": 0, "tax": 0, "total": 0,
++    }

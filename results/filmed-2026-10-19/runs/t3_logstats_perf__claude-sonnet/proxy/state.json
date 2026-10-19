@@ -1,0 +1,24 @@
+{
+ "requests": 4,
+ "refused": 0,
+ "spent_usd": 0.1126277,
+ "reserved_usd": 0.0,
+ "stopped": false,
+ "stop_reason": null,
+ "gen_ids": [
+  "msg_011CgBZTuwWTSKsb32xSHvHs",
+  "gen-1792411285-K202vf8EMJJ7PzlhEagN",
+  "msg_011CgBZU58eumqa7od2xvJ7U",
+  "gen-1792411294-5Ga7NIBagEZIuXyG291C",
+  "msg_011CgBZUEEb34TTmNgT6ey2H",
+  "gen-1792411297-GUWp50Rz2Agi0vfvaOME",
+  "msg_011CgBZXSsSg1EyAvph7Xbiw",
+  "gen-1792411340-WxOJf2faUw04zZ3EKEff"
+ ],
+ "strict": false,
+ "prev_in_tokens": 25949,
+ "prev_cache_ok": true,
+ "prev_t": 1792411345.8495367,
+ "bytes_per_token": 2.6941731858645808,
+ "mock_turns": 0
+}

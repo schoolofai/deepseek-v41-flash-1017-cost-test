@@ -1,0 +1,28 @@
+{
+ "requests": 6,
+ "refused": 0,
+ "spent_usd": 0.0038666819999999998,
+ "reserved_usd": 0.0,
+ "stopped": false,
+ "stop_reason": null,
+ "gen_ids": [
+  "gen-1792421269-nNmKRb9fKQaT2FNWlf7t",
+  "gen-1792421269-nNmKRb9fKQaT2FNWlf7t",
+  "gen-1792421272-uj2x251jhKugLcoHyWzE",
+  "gen-1792421272-uj2x251jhKugLcoHyWzE",
+  "gen-1792421274-07juQzoXBsauHcaUATie",
+  "gen-1792421274-07juQzoXBsauHcaUATie",
+  "gen-1792421279-wo2gmyghySOKqm1L0pmX",
+  "gen-1792421279-wo2gmyghySOKqm1L0pmX",
+  "gen-1792421287-xuDkeiwhi8PDoErWCULe",
+  "gen-1792421287-xuDkeiwhi8PDoErWCULe",
+  "gen-1792421291-DakGPx5uwzYzyo347sd5",
+  "gen-1792421291-DakGPx5uwzYzyo347sd5"
+ ],
+ "strict": false,
+ "prev_in_tokens": 12733,
+ "prev_cache_ok": true,
+ "prev_t": 1792421293.297038,
+ "bytes_per_token": 3.0,
+ "mock_turns": 0
+}

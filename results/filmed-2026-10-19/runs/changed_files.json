@@ -1,0 +1,39 @@
+{
+ "t1_checkout_bugfix__claude-sonnet": [
+  "shop/cart.py",
+  "shop/discounts.py",
+  "shop/money.py",
+  "shop/tax.py"
+ ],
+ "t1_checkout_bugfix__codex-gpt": [
+  "shop/cart.py",
+  "shop/discounts.py",
+  "shop/money.py",
+  "shop/tax.py",
+  "tests/test_spec.py"
+ ],
+ "t3_logstats_perf__claude-sonnet": [
+  "logstats/parser.py",
+  "logstats/report.py",
+  "logstats/sessions.py"
+ ],
+ "t3_logstats_perf__codex-gpt": [
+  "logstats/parser.py",
+  "logstats/report.py",
+  "logstats/sessions.py",
+  "tests/test_parser.py",
+  "tests/test_report.py",
+  "tests/test_sessions.py"
+ ],
+ "t1_checkout_bugfix__opencode-deepseek": [
+  "shop/cart.py",
+  "shop/discounts.py",
+  "shop/money.py",
+  "shop/tax.py"
+ ],
+ "t3_logstats_perf__opencode-deepseek": [
+  "logstats/parser.py",
+  "logstats/report.py",
+  "logstats/sessions.py"
+ ]
+}

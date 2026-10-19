@@ -1,0 +1,62 @@
+{
+ "cap_usd": 3.0,
+ "total_usd": 0.6183833079999999,
+ "runs": [
+  {
+   "time": "2026-10-19T12:56:36+01:00",
+   "task": "t1_checkout_bugfix",
+   "harness": "opencode-deepseek",
+   "billed_usd": 0.0,
+   "billed_source": "partial_stats_or_proxy_usage"
+  },
+  {
+   "time": "2026-10-19T12:59:07+01:00",
+   "task": "t1_checkout_bugfix",
+   "harness": "codex-gpt",
+   "billed_usd": 0.10615219999999999,
+   "billed_source": "openrouter_generation_stats"
+  },
+  {
+   "time": "2026-10-19T12:59:38+01:00",
+   "task": "t1_checkout_bugfix",
+   "harness": "claude-sonnet",
+   "billed_usd": 0.0921998,
+   "billed_source": "partial_stats_or_proxy_usage"
+  },
+  {
+   "time": "2026-10-19T13:02:33+01:00",
+   "task": "t3_logstats_perf",
+   "harness": "claude-sonnet",
+   "billed_usd": 0.1126277,
+   "billed_source": "partial_stats_or_proxy_usage"
+  },
+  {
+   "time": "2026-10-19T13:05:12+01:00",
+   "task": "t3_logstats_perf",
+   "harness": "opencode-deepseek",
+   "billed_usd": 0.0,
+   "billed_source": "partial_stats_or_proxy_usage"
+  },
+  {
+   "time": "2026-10-19T13:13:21+01:00",
+   "task": "t3_logstats_perf",
+   "harness": "codex-gpt",
+   "billed_usd": 0.28709019999999996,
+   "billed_source": "partial_stats_or_proxy_usage"
+  },
+  {
+   "time": "2026-10-19T15:48:14+01:00",
+   "task": "t1_checkout_bugfix",
+   "harness": "opencode-deepseek",
+   "billed_usd": 0.0038666819999999998,
+   "billed_source": "openrouter_generation_stats"
+  },
+  {
+   "time": "2026-10-19T15:52:31+01:00",
+   "task": "t3_logstats_perf",
+   "harness": "opencode-deepseek",
+   "billed_usd": 0.016446726000000002,
+   "billed_source": "openrouter_generation_stats"
+  }
+ ]
+}

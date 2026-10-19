@@ -1,0 +1,367 @@
+--- a/logstats/parser.py
++++ b/logstats/parser.py
+@@ -1,6 +1,10 @@
+ import re
+ from dataclasses import dataclass
+ from datetime import datetime, timezone
++
++
++_LINE_PATTERN = re.compile(r"^(\S+) user=(\S+) path=(\S+) status=(\d{3}) ms=(\d+)$")
++_CANONICAL_TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+ 
+ 
+ @dataclass(frozen=True)
+@@ -14,16 +18,20 @@
+ 
+ def parse_line(line: str):
+     """Return an Event, or None for a malformed line."""
+-    pattern = re.compile(r"^(\S+) user=(\S+) path=(\S+) status=(\d{3}) ms=(\d+)$")
+-    m = pattern.match(line.strip())
+-    if not m:
++    match = _LINE_PATTERN.match(line.strip())
++    if not match:
+         return None
++    stamp = match.group(1)
+     try:
+-        ts = datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
++        if _CANONICAL_TIMESTAMP.fullmatch(stamp):
++            ts = datetime.fromisoformat(stamp[:-1])
++        else:
++            ts = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
++        ts = ts.replace(tzinfo=timezone.utc)
+     except ValueError:
+         return None
+-    path = m.group(3).split("?")[0].rstrip("/") or "/"
+-    return Event(int(ts.timestamp()), m.group(2).lower(), path, int(m.group(4)), int(m.group(5)))
++    path = match.group(3).split("?")[0].rstrip("/") or "/"
++    return Event(int(ts.timestamp()), match.group(2).lower(), path, int(match.group(4)), int(match.group(5)))
+ 
+ 
+ def parse_all(lines):
+@@ -31,9 +39,9 @@
+     for line in lines:
+         if not line.strip():
+             continue
+-        e = parse_line(line)
+-        if e is None:
++        event = parse_line(line)
++        if event is None:
+             skipped += 1
+         else:
+-            events.append(e)
++            events.append(event)
+     return events, skipped
+--- a/logstats/report.py
++++ b/logstats/report.py
+@@ -1,5 +1,7 @@
++from collections import Counter, defaultdict
++
+ from .parser import parse_all
+-from .sessions import sessions_per_user, longest_session_seconds
++from .sessions import session_statistics
+ 
+ 
+ def percentile(values, pct):
+@@ -10,38 +12,43 @@
+ 
+ 
+ def top_paths(events, k=5):
+-    paths = [e.path for e in events]
+-    counts = []
+-    for p in set(paths):
+-        counts.append((p, paths.count(p)))
+-    counts.sort(key=lambda pc: (-pc[1], pc[0]))
+-    return counts[:k]
++    counts = Counter(event.path for event in events)
++    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:k]
+ 
+ 
+ def latency_by_path(events):
++    latencies = defaultdict(list)
++    for event in events:
++        latencies[event.path].append(event.ms)
+     out = {}
+-    for p in sorted(set(e.path for e in events)):
+-        ms = [e.ms for e in events if e.path == p]
+-        out[p] = {"p50": percentile(ms, 50), "p95": percentile(ms, 95), "max": max(ms)}
++    for path in sorted(latencies):
++        ordered = sorted(latencies[path])
++        count = len(ordered)
++        out[path] = {
++            "p50": ordered[(count - 1) // 2],
++            "p95": ordered[(95 * count + 99) // 100 - 1],
++            "max": ordered[-1],
++        }
+     return out
+ 
+ 
+ def error_rate(events):
+     if not events:
+         return 0.0
+-    errors = len([e for e in events if e.status >= 500])
++    errors = sum(event.status >= 500 for event in events)
+     return round(errors / len(events), 4)
+ 
+ 
+ def build_report(lines, k=5):
+     events, skipped = parse_all(lines)
++    sessions, longest_sessions = session_statistics(events)
+     return {
+         "events": len(events),
+         "skipped": skipped,
+-        "users": len(set(e.user for e in events)),
++        "users": len(sessions),
+         "top_paths": top_paths(events, k),
+         "latency": latency_by_path(events),
+         "error_rate": error_rate(events),
+-        "sessions": dict(sorted(sessions_per_user(events).items())),
+-        "longest_session_s": longest_session_seconds(events),
++        "sessions": dict(sorted(sessions.items())),
++        "longest_session_s": longest_sessions,
+     }
+--- a/logstats/sessions.py
++++ b/logstats/sessions.py
+@@ -1,29 +1,37 @@
++from collections import defaultdict
++from itertools import groupby
++
++
+ SESSION_GAP = 30 * 60  # a gap of MORE than 30 minutes starts a new session
++
++
++def session_statistics(events):
++    """Compute both statistics, counting every duplicate event after a gap."""
++    times_by_user = defaultdict(list)
++    for event in events:
++        times_by_user[event.user].append(event.ts)
++
++    sessions = {user: 1 for user in times_by_user}
++    longest = {}
++    for user in sorted(times_by_user):
++        times = sorted(times_by_user[user])
++        best = 0
++        start = previous = times[0]
++        for timestamp, duplicates in groupby(times):
++            if timestamp - previous > SESSION_GAP:
++                sessions[user] += sum(1 for _ in duplicates)
++                start = timestamp
++            best = max(best, timestamp - start)
++            previous = timestamp
++        longest[user] = best
++    return sessions, longest
+ 
+ 
+ def sessions_per_user(events):
+     """Return {user: number_of_sessions}."""
+-    result = {e.user: 1 for e in events}
+-    for e in events:
+-        earlier = [o for o in events if o.user == e.user and (o.ts < e.ts)]
+-        if not earlier:
+-            continue
+-        prev = max(o.ts for o in earlier)
+-        if e.ts - prev > SESSION_GAP:
+-            result[e.user] += 1
+-    return result
++    return session_statistics(events)[0]
+ 
+ 
+ def longest_session_seconds(events):
+     """Return {user: length in seconds of that user's longest session}."""
+-    out = {}
+-    users = sorted(set(e.user for e in events))
+-    for u in users:
+-        times = sorted(e.ts for e in events if e.user == u)
+-        best, start = 0, times[0]
+-        for i in range(1, len(times)):
+-            if times[i] - times[i - 1] > SESSION_GAP:
+-                start = times[i]
+-            best = max(best, times[i] - start)
+-        out[u] = best
+-    return out
++    return session_statistics(events)[1]
+--- /dev/null
++++ b/tests/test_parser.py
+@@ -0,0 +1,75 @@
++import pytest
++
++from logstats.parser import Event, parse_all, parse_line
++
++
++@pytest.mark.parametrize(
++    ("stamp", "timestamp"),
++    [
++        ("2026-10-19T10:00:00Z", 1792404000),
++        ("2026-10-19t10:00:00z", 1792404000),
++        ("2026-1-2T3:4:5Z", 1767323045),
++        ("２０２６-10-19T10:00:00Z", 1792404000),
++        ("1969-12-31T23:59:59Z", -1),
++        ("0001-01-01T00:00:00Z", -62135596800),
++        ("9999-12-31T23:59:59Z", 253402300799),
++        ("2024-02-29T00:00:00Z", 1709164800),
++    ],
++)
++def test_accepted_timestamps_and_unicode_normalization(stamp, timestamp):
++    line = f"\t{stamp} user=İ path=/A///?q=1 status=５００ ms=٠\u2003"
++    assert parse_line(line) == Event(timestamp, "i̇", "/A", 500, 0)
++
++
++@pytest.mark.parametrize(
++    "stamp",
++    [
++        "2026-10-19T10:00:00.000Z",
++        "2026-10-19T10:00:00+00:00",
++        "20261019T10:00:00Z",
++        "2026-W43-1T10:00:00Z",
++        "2026-10-19X10:00:00Z",
++        "2026-02-29T00:00:00Z",
++        "2026-04-31T00:00:00Z",
++        "2026-13-01T00:00:00Z",
++        "2026-10-19T24:00:00Z",
++        "2026-10-19T10:60:00Z",
++        "2026-10-19T10:00:60Z",
++        "0000-01-01T00:00:00Z",
++        "10000-01-01T00:00:00Z",
++    ],
++)
++def test_rejected_timestamps(stamp):
++    assert parse_line(f"{stamp} user=alice path=/ status=200 ms=1") is None
++
++
++@pytest.mark.parametrize(
++    ("path", "expected"),
++    [("?q=1", "/"), ("///", "/"), ("/a//b//?q=1", "/a//b"), ("a", "a")],
++)
++def test_path_normalization(path, expected):
++    event = parse_line(f"2026-10-19T10:00:00Z user=ALICE path={path} status=200 ms=0")
++    assert event.path == expected
++
++
++@pytest.mark.parametrize(
++    "fields",
++    [
++        "user=alice  path=/ status=200 ms=1",
++        "user=alice\tpath=/ status=200 ms=1",
++        "user=alice path=/ status=20 ms=1",
++        "user=alice path=/ status=2000 ms=1",
++        "user=alice path=/ status=200 ms=-1",
++        "user=alice path=/ status=200 ms=+1",
++        "user=alice path=/ status=200 ms=1.0",
++        "user=alice path=/ status=200 ms=1 extra",
++    ],
++)
++def test_rejected_fields(fields):
++    assert parse_line(f"2026-10-19T10:00:00Z {fields}") is None
++
++
++def test_blank_lines_are_not_skipped_lines():
++    valid = "2026-10-19T10:00:00Z user=alice path=/ status=200 ms=1"
++    lines = ["", " \t\n", "\u2003", "garbage", "\ufeff", valid]
++    assert parse_all(iter(lines)) == ([parse_line(valid)], 2)
+--- a/tests/test_report.py
++++ b/tests/test_report.py
+@@ -1,6 +1,9 @@
+ import time
+ 
+-from logstats.report import build_report
++import pytest
++
++from logstats.parser import Event
++from logstats.report import build_report, latency_by_path, percentile
+ from tests.gen import make_lines
+ 
+ LINES = [
+@@ -28,3 +31,42 @@
+     t = time.perf_counter()
+     build_report(lines)
+     assert time.perf_counter() - t < 0.5
++
++
++def test_empty_report():
++    assert build_report(iter(["", " \t", "garbage"])) == {
++        "events": 0,
++        "skipped": 1,
++        "users": 0,
++        "top_paths": [],
++        "latency": {},
++        "error_rate": 0.0,
++        "sessions": {},
++        "longest_session_s": {},
++    }
++
++
++@pytest.mark.parametrize("limit", [None, -10, -1, 0, 1, 2, 10])
++def test_report_order_and_top_path_slice(limit):
++    lines = [
++        f"2026-10-19T10:00:00Z user={user} path={path} status=200 ms=1"
++        for user, path in [("bob", "/b"), ("alice", "/a"), ("carol", "/c")]
++    ]
++    report = build_report(iter(lines), k=limit)
++    assert report["top_paths"] == [("/a", 1), ("/b", 1), ("/c", 1)][:limit]
++    assert list(report) == [
++        "events", "skipped", "users", "top_paths", "latency", "error_rate", "sessions", "longest_session_s"
++    ]
++    assert list(report["latency"]) == ["/a", "/b", "/c"]
++    assert list(report["latency"]["/a"]) == ["p50", "p95", "max"]
++    assert list(report["sessions"]) == ["alice", "bob", "carol"]
++    assert list(report["longest_session_s"]) == ["alice", "bob", "carol"]
++
++
++@pytest.mark.parametrize("count", [1, 2, 3, 19, 20, 21, 99, 100, 101])
++def test_latency_nearest_rank_boundaries(count):
++    values = list(reversed(range(count)))
++    events = [Event(0, "alice", "/", 200, value) for value in values]
++    assert latency_by_path(events) == {
++        "/": {"p50": percentile(values, 50), "p95": percentile(values, 95), "max": max(values)}
++    }
+--- /dev/null
++++ b/tests/test_sessions.py
+@@ -0,0 +1,49 @@
++import random
++
++import pytest
++
++from logstats.parser import Event
++from logstats.sessions import longest_session_seconds, sessions_per_user
++
++
++@pytest.mark.parametrize(
++    ("times", "sessions", "longest"),
++    [
++        ([], 0, 0),
++        ([0, 0, 0], 1, 0),
++        ([1801, 0, 1801], 3, 0),
++        ([0, 1800, 3600], 1, 3600),
++        ([0, 1800, 3601], 2, 1800),
++        ([1801, 0, 1801, 3601, 5402, 5402], 5, 1800),
++        ([-1801, 0, 0], 3, 0),
++        ([0, 1801, 1801, 1802, 3602], 3, 1801),
++    ],
++)
++def test_session_gaps_and_duplicate_timestamps(times, sessions, longest):
++    events = [Event(timestamp, "alice", "/", 200, 0) for timestamp in times]
++    original = events.copy()
++    assert sessions_per_user(events) == ({"alice": sessions} if times else {})
++    assert longest_session_seconds(events) == ({"alice": longest} if times else {})
++    assert events == original
++
++
++def test_session_dictionary_order():
++    events = [Event(0, user, "/", 200, 0) for user in ["bob", "alice", "carol", "bob"]]
++    assert list(sessions_per_user(events)) == ["bob", "alice", "carol"]
++    assert list(longest_session_seconds(events)) == ["alice", "bob", "carol"]
++
++
++def test_session_counts_match_strictly_earlier_definition():
++    randomizer = random.Random(42)
++    timestamps = [-3602, -1801, -1, 0, 1, 1800, 1801, 3601, 5402]
++    for _ in range(100):
++        events = [
++            Event(randomizer.choice(timestamps), randomizer.choice(["a", "b", "c"]), "/", 200, 0)
++            for _ in range(randomizer.randrange(50))
++        ]
++        expected = {event.user: 1 for event in events}
++        for event in events:
++            earlier = [other.ts for other in events if other.user == event.user and other.ts < event.ts]
++            if earlier and event.ts - max(earlier) > 1800:
++                expected[event.user] += 1
++        assert list(sessions_per_user(events).items()) == list(expected.items())

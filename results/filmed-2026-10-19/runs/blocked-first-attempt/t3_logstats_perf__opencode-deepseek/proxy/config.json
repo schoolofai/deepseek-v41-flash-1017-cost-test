@@ -1,0 +1,24 @@
+{
+ "run_id": "t3_logstats_perf__opencode-deepseek",
+ "mode": "live",
+ "listen_port": 0,
+ "upstream_host": "openrouter.ai",
+ "model": "deepseek/deepseek-v4.1-flash-1017",
+ "pin": "deepseek",
+ "max_requests": 45,
+ "budget_usd": 0.15,
+ "max_output_tokens": 12288,
+ "max_input_tokens": 100000,
+ "prices": {
+  "in": 0.3,
+  "out": 1.2,
+  "cache_read": 0.006,
+  "cache_write": 0.3
+ },
+ "input_guard_rate": 0.3,
+ "cache_write_guard_rate": 0.3,
+ "log": "./.sandbox/live-20261019-125630/t3_logstats_perf__opencode-deepseek/proxy/requests.jsonl",
+ "state": "./.sandbox/live-20261019-125630/t3_logstats_perf__opencode-deepseek/proxy/state.json",
+ "stop_flag": "./.sandbox/live-20261019-125630/t3_logstats_perf__opencode-deepseek/proxy/STOP",
+ "port_file": "./.sandbox/live-20261019-125630/t3_logstats_perf__opencode-deepseek/proxy/port"
+}

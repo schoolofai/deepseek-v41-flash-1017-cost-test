@@ -1,0 +1,17 @@
+{
+ "requests": 1,
+ "refused": 0,
+ "spent_usd": 0.0,
+ "reserved_usd": 0.0,
+ "stopped": false,
+ "stop_reason": null,
+ "gen_ids": [
+  "gen-1792411441-pT6Ha9fbjyrsDHQmuKHh"
+ ],
+ "strict": false,
+ "prev_in_tokens": 0,
+ "prev_cache_ok": false,
+ "prev_t": 1792411441.4486158,
+ "bytes_per_token": 3.0,
+ "mock_turns": 0
+}

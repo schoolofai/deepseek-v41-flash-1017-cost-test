@@ -1,0 +1,10 @@
+{
+ "id": "t2_tracker_feature",
+ "title": "Feature across several files (due dates + tags in a CLI)",
+ "difficulty": "2 - medium",
+ "kind": "feature",
+ "wall_time_s": 900,
+ "max_requests": 35,
+ "prompt": "This repo is a small command-line task tracker (package `tracker/`). Implement the feature described in FEATURE.md (due dates, tags, filters, sorting, and a version-2 storage format that still loads old files). Keep all existing behaviour working. Run the tests with `python -m pytest -q`; the visible tests cover only part of FEATURE.md, so check every rule yourself. When you are done, stop.",
+ "test_timeout_s": 60
+}

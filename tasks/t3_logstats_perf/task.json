@@ -1,0 +1,10 @@
+{
+ "id": "t3_logstats_perf",
+ "title": "Refactor for performance with exact output equivalence (log report)",
+ "difficulty": "3 - hardest",
+ "kind": "refactor-perf",
+ "wall_time_s": 1200,
+ "max_requests": 45,
+ "prompt": "This repo builds a usage report from access logs (package `logstats/`). Read PERF.md: `build_report` is far too slow and must handle 200,000 lines in well under 3 seconds, while its output stays exactly identical to the current implementation for every input, including edge cases and quirks. Refactor the code across `logstats/` to fix this. Run the tests with `python -m pytest -q`; they are not a complete check of equivalence. When you are done, stop.",
+ "test_timeout_s": 60
+}

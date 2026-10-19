@@ -1,0 +1,10 @@
+{
+ "id": "t1_checkout_bugfix",
+ "title": "Bug fix across modules (checkout totals)",
+ "difficulty": "1 - easier",
+ "kind": "bugfix",
+ "wall_time_s": 600,
+ "max_requests": 25,
+ "prompt": "This repo is a small checkout library (package `shop/`). The test suite is failing and customers report wrong totals. Read SPEC.md, find and fix every bug in the `shop` package so it behaves exactly as SPEC.md says. Keep the public API the same. Run the tests with `python -m pytest -q`. Note the visible tests do not cover every rule in SPEC.md. When you are done, stop.",
+ "test_timeout_s": 60
+}

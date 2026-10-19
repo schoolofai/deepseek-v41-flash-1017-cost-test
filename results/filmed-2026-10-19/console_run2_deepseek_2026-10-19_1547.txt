@@ -1,0 +1,19 @@
+PLAN B: 6 runs (n=1 per task x harness)   global hard cap $3.00
+task                   harness             budget  1-miss overshoot req cap   wall
+t1_checkout_bugfix     opencode-deepseek  $  0.08            $0.029      25   10m
+t1_checkout_bugfix     codex-gpt          $  0.42            $0.240      25   10m
+t1_checkout_bugfix     claude-sonnet      $  0.42            $0.390      25   10m
+t3_logstats_perf       claude-sonnet      $  0.85            $0.390      45   20m
+t3_logstats_perf       opencode-deepseek  $  0.15            $0.029      45   20m
+t3_logstats_perf       codex-gpt          $  0.85            $0.240      45   20m
+sum of per-run budgets: $2.77   (plus at most one cache-miss overshoot per run; the global guard below
+never starts a run unless  spent_so_far + run_budget + that run's overshoot <= $3.00,
+shrinking the run budget to fit or skipping the run, so the total can never pass $3.00).
+  worst single request anthropic/claude-sonnet-5.5: $0.523  (100k in at guard rate + 12,288 out)
+  worst single request deepseek/deepseek-v4.1-flash-1017: $0.045  (100k in at guard rate + 12,288 out)
+  worst single request openai/gpt-6.1-sol: $0.373  (100k in at guard rate + 12,288 out)
+-> t1_checkout_bugfix / opencode-deepseek  budget $0.08  mode=live
+   ended=exited exit=0 reqs=6 hidden 30/30 visible 5/5 wall 28.0s billed $0.0039  running total $0.6019
+-> t3_logstats_perf / opencode-deepseek  budget $0.15  mode=live
+   ended=exited exit=0 reqs=19 hidden 8/8 visible 2/2 wall 242.7s billed $0.0164  running total $0.6184
+results: ./results/live-20261019-154745/results.jsonl

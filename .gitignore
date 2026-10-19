@@ -1,0 +1,8 @@
+.sandbox/
+tools/node_modules/
+.venv-tests/
+__pycache__/
+.pytest_cache/
+results/dryrun-*/
+results/live-*/
+results/spend_ledger.json

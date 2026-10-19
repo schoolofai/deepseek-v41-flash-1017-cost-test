@@ -1,0 +1,80 @@
+{
+ "time": "2026-10-19T13:02:33+01:00",
+ "mode": "live",
+ "task": "t3_logstats_perf",
+ "harness": "claude-sonnet",
+ "label": "Claude Sonnet 5.5 in Claude Code",
+ "model": "anthropic/claude-sonnet-5.5",
+ "budget_usd": 0.85,
+ "wall_s": 61.0,
+ "exit_code": 0,
+ "ended": "exited",
+ "finished": true,
+ "hidden_passed": 8,
+ "hidden_total": 8,
+ "visible_passed": 2,
+ "visible_total": 2,
+ "solved": true,
+ "edited_visible_tests": false,
+ "changed_files": 6,
+ "model_requests": 4,
+ "refused": [],
+ "proxy_spent_usd": 0.1126277,
+ "stop_reason": null,
+ "tokens": {
+  "in_total": 81985,
+  "cache_read": 64092,
+  "cache_write": 17885,
+  "out": 6149,
+  "reasoning": 0
+ },
+ "first_request": {
+  "path": "/api/v1/messages",
+  "api": "messages",
+  "model": "anthropic/claude-sonnet-5.5",
+  "stream": true,
+  "tools_count": 6,
+  "tool_names": [
+   "Bash",
+   "Edit",
+   "Glob",
+   "Grep",
+   "Read",
+   "Write"
+  ],
+  "tools_bytes": 22346,
+  "system_chars": 27266,
+  "est_in_tokens": 17950,
+  "provider_pin": "anthropic",
+  "max_out_requested": 12288,
+  "auth_header": "authorization",
+  "auth_is_dryrun_dummy": null,
+  "stripped_service_tier": null,
+  "harness_sent_provider": null,
+  "max_out_clamped": 12288
+ },
+ "mock_replies": [],
+ "tool_result_seen": null,
+ "other_paths": [],
+ "billed": {
+  "billed_usd": 0.1126277,
+  "found": 4,
+  "missing": [
+   "msg_011CgBZTuwWTSKsb32xSHvHs",
+   "msg_011CgBZU58eumqa7od2xvJ7U",
+   "msg_011CgBZUEEb34TTmNgT6ey2H",
+   "msg_011CgBZXSsSg1EyAvph7Xbiw"
+  ],
+  "providers": {
+   "Anthropic": 4
+  },
+  "native": {
+   "prompt": 81985,
+   "completion": 6149,
+   "cached": 64092,
+   "reasoning": 2400
+  }
+ },
+ "billed_usd": 0.1126277,
+ "billed_source": "partial_stats_or_proxy_usage"
+}

@@ -1,0 +1,78 @@
+{
+ "time": "2026-10-19T12:59:07+01:00",
+ "mode": "live",
+ "task": "t1_checkout_bugfix",
+ "harness": "codex-gpt",
+ "label": "GPT-6.1 Sol in Codex CLI",
+ "model": "openai/gpt-6.1-sol",
+ "budget_usd": 0.42,
+ "wall_s": 110.1,
+ "exit_code": 0,
+ "ended": "exited",
+ "finished": true,
+ "hidden_passed": 30,
+ "hidden_total": 30,
+ "visible_passed": 5,
+ "visible_total": 5,
+ "solved": true,
+ "edited_visible_tests": false,
+ "changed_files": 9,
+ "model_requests": 8,
+ "refused": [],
+ "proxy_spent_usd": 0.10615219999999999,
+ "stop_reason": null,
+ "tokens": {
+  "in_total": 89446,
+  "cache_read": 71817,
+  "cache_write": 17605,
+  "out": 5491,
+  "reasoning": 1251
+ },
+ "first_request": {
+  "path": "/api/v1/responses",
+  "api": "responses",
+  "model": "openai/gpt-6.1-sol",
+  "stream": true,
+  "tools_count": 7,
+  "tool_names": [
+   "exec_command",
+   "write_stdin",
+   "request_user_input",
+   "view_image",
+   "get_goal",
+   "create_goal",
+   "update_goal"
+  ],
+  "tools_bytes": 7562,
+  "system_chars": 19798,
+  "est_in_tokens": 10829,
+  "provider_pin": "openai",
+  "max_out_requested": null,
+  "auth_header": "authorization",
+  "auth_is_dryrun_dummy": null,
+  "stripped_service_tier": null,
+  "harness_sent_provider": null,
+  "max_out_clamped": 12288
+ },
+ "mock_replies": [],
+ "tool_result_seen": null,
+ "other_paths": [
+  "/api/v1/models"
+ ],
+ "billed": {
+  "billed_usd": 0.10615219999999999,
+  "found": 8,
+  "missing": [],
+  "providers": {
+   "OpenAI": 8
+  },
+  "native": {
+   "prompt": 89446,
+   "completion": 5491,
+   "cached": 71817,
+   "reasoning": 1251
+  }
+ },
+ "billed_usd": 0.10615219999999999,
+ "billed_source": "openrouter_generation_stats"
+}
